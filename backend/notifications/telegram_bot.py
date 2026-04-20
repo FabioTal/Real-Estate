@@ -46,20 +46,20 @@ def send_property_notification(listing):
 
     try:
         if image_url:
+            caption = message if len(message) <= 1024 else message[:1021] + '...'
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto'
             payload = {
                 'chat_id': CHAT_ID,
                 'photo': image_url,
-                'caption': message
+                'caption': caption
             }
-            response = requests.post(url, json=payload, timeout=10)
         else:
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
             payload = {
                 'chat_id': CHAT_ID,
                 'text': message
             }
-            response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10)
 
         if response.status_code == 200:
             print(f'  Telegram sent! [{contact_type.upper()}] [{source}]')
