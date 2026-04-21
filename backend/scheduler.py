@@ -2,8 +2,9 @@ import sys, os, asyncio, datetime
 sys.path.append(os.path.dirname(__file__))
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from database import init_db
+from database import init_db, get_all_listings
 from notifications.telegram_bot import send_property_notification
+from sheets_sync import save_listing_to_sheet, bulk_sync_db_to_sheet
 from scrapers.njoftime import scrape_njoftime
 from scrapers.merrjep import scrape_merrjep
 from scrapers.instagram import scrape_instagram
@@ -16,7 +17,7 @@ def run_scraper_job():
 
     is_first_run = not os.path.exists(FIRST_RUN_FLAG)
     if is_first_run:
-        print('First run: populating database silently (no Telegram notifications).')
+        print('First run: populating database (no Telegram, sheet will be synced after).')
 
     total_new = 0
 
@@ -36,8 +37,9 @@ def run_scraper_job():
                 location=search['location'],
                 max_pages=search['max_pages']
             ))
-            if not is_first_run:
-                for listing in new:
+            for listing in new:
+                save_listing_to_sheet(listing)
+                if not is_first_run:
                     send_property_notification(listing)
             total_new += len(new)
             print(f"MerrJep {search['category']} {search['location']}: {len(new)} new")
@@ -47,8 +49,9 @@ def run_scraper_job():
     # --- NJOFTIME ---
     try:
         new = scrape_njoftime(max_pages=2)
-        if not is_first_run:
-            for listing in new:
+        for listing in new:
+            save_listing_to_sheet(listing)
+            if not is_first_run:
                 send_property_notification(listing)
         total_new += len(new)
         print(f'Njoftime: {len(new)} new')
@@ -58,8 +61,9 @@ def run_scraper_job():
     # --- INSTAGRAM ---
     try:
         new = scrape_instagram(max_posts_per_tag=10)
-        if not is_first_run:
-            for listing in new:
+        for listing in new:
+            save_listing_to_sheet(listing)
+            if not is_first_run:
                 send_property_notification(listing)
         total_new += len(new)
         print(f'Instagram: {len(new)} new')
@@ -68,14 +72,27 @@ def run_scraper_job():
 
     if is_first_run:
         open(FIRST_RUN_FLAG, 'w').close()
-        print(f'--- First run done. {total_new} listings saved. Notifications start next scan. ---')
+        print(f'--- First run done. {total_new} listings found. Syncing all to sheet... ---')
+        try:
+            bulk_sync_db_to_sheet(get_all_listings())
+        except Exception as e:
+            print(f'Bulk sync error: {e}')
     else:
-        print(f'--- Done. {total_new} new listings sent to Telegram ---')
+        print(f'--- Done. {total_new} new listings found. ---')
 
 if __name__ == '__main__':
     init_db()
     print('Starting Real Estate Agent — MerrJep + Njoftime + Instagram')
-    print('Running first scan now...')
+
+    # If DB already has data but sheet is empty, bulk sync now
+    if os.path.exists(FIRST_RUN_FLAG):
+        print('Checking if sheet needs bulk sync...')
+        try:
+            bulk_sync_db_to_sheet(get_all_listings())
+        except Exception as e:
+            print(f'Startup sync error: {e}')
+
+    print('Running scan now...')
     run_scraper_job()
 
     scheduler = BlockingScheduler()

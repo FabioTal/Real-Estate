@@ -2,7 +2,7 @@ import sys
 import os
 import time
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from database import save_listing, init_db
+from database import save_listing, update_listing_contact, init_db
 from scrapers.contact_classifier import extract_and_classify
 from dotenv import load_dotenv
 
@@ -98,6 +98,8 @@ def scrape_instagram(max_posts_per_tag=10):
                             contacts = extract_and_classify(caption, profile_url, 'instagram', status)
 
                         contact_type = contacts[0]['type'] if contacts else 'unknown'
+                        phone = contacts[0]['phone'] if contacts else ''
+                        update_listing_contact(listing_id, phone, contact_type, status)
 
                         listing = {
                             "source": "instagram",

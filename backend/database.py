@@ -17,9 +17,19 @@ def init_db():
             description TEXT,
             image_url TEXT,
             listing_url TEXT,
-            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            phone TEXT DEFAULT '',
+            contact_type TEXT DEFAULT 'unknown',
+            status TEXT DEFAULT ''
         )
     ''')
+    # migrate existing DB — add columns if missing
+    for col, default in [('phone', "''"), ('contact_type', "'unknown'"), ('status', "''")]:
+        try:
+            c.execute(f"ALTER TABLE listings ADD COLUMN {col} TEXT DEFAULT {default}")
+            conn.commit()
+        except:
+            pass
     c.execute('''
         CREATE TABLE IF NOT EXISTS contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +62,16 @@ def save_listing(source, listing_id, title, price, location,
         return False
     finally:
         conn.close()
+
+def update_listing_contact(listing_id, phone, contact_type, status=''):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        'UPDATE listings SET phone=?, contact_type=?, status=? WHERE listing_id=?',
+        (phone, contact_type, status, listing_id)
+    )
+    conn.commit()
+    conn.close()
 
 def save_contact(phone_number, contact_type='unknown', google_hits=0):
     conn = sqlite3.connect(DB_PATH)
